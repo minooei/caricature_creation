@@ -16,15 +16,33 @@ def scale_face(face , caricature_head_height):
 def ellipse_face(face):
     mask = np.zeros_like(face)
     rows , cols = mask.shape[0:2]
-    cv2.ellipse(mask , center=(rows/2 , cols/2) , axes=(60,70) , angle=0 , startAngle=0,
+    cv2.ellipse(mask , center=(rows/2 , cols/2+5) , axes=(60,60) , angle=0 , startAngle=0,
                 endAngle=360 , color=(255,255,255) , thickness=-1)
     return cv2.bitwise_and(face , mask)
 
 def find_face(img , img_gray):
     face_cascade = cv2.CascadeClassifier('haar_cascade_files/haarcascade_frontalface_default.xml')
-    faces = face_cascade.detectMultiScale(img_gray, 1.05, 10, 0)
+    faces = face_cascade.detectMultiScale(image=img_gray, scaleFactor=1.05, minNeighbors=10 , flags=cv2.CASCADE_FIND_BIGGEST_OBJECT)
     (x , y , w , h) = faces[0]
     return img[y:y+h ,  x:x+w]
+
+def gray_scale(img):
+    if(img.shape[2] == 4):
+        img_gray = cv2.cvtColor(img , cv2.COLOR_BGRA2GRAY)
+        return img_gray
+    else:
+        img_gray = cv2.cvtColor(img , cv2.COLOR_BGR2GRAY)
+        return img_gray
+
+def equalize_image(img):
+    return cv2.equalizeHist(img)
+
+def bilateralFilter(image):
+    size = 17
+    sigmacolor = 9
+    sigmaspace = 7
+    return cv2.bilateralFilter(image, size, sigmaColor=sigmacolor, sigmaSpace=sigmaspace)
+    #return cv2.bilateralFilter(image, size, 0, 20.0 , 2.0)
 
 def dodgeNaive(image, mask):
     return cv2.divide(image, 255-mask, scale=256)
@@ -115,7 +133,7 @@ def remove_white_pixel(image):
         j = 0
         while( j < cols ):
             first_val = img_copy.item(i , j)
-            if( first_val >= 240):
+            if( first_val >= 210):
                 img_copy[i , j] = 0
             j += 1
         i += 1
@@ -170,6 +188,11 @@ def write_mat_to_file(mat , file_name):
         i += 1
     return
 
+def whiter(img , name):
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    cl1 = clahe.apply(img)
+    cv2.imwrite(name, cl1)
+
 def create_caricature_RGB(face , caricature , transition_y , transition_x):
     # Scaled Face information
     face_height, face_width = face.shape[0:2]
@@ -193,7 +216,7 @@ def create_caricature_RGB(face , caricature , transition_y , transition_x):
 
 def create_caricature_GRAY(face_gray , caricature , transition_y , transition_x):
     # Scaled Face information
-    caricature = cv2.cvtColor(caricature , cv2.COLOR_BGR2GRAY)
+    caricature = gray_scale(caricature.copy())
     face_height, face_width = face_gray.shape[0:2]
     # ROI
     roi = caricature[transition_y:transition_y+face_height ,transition_x:transition_x+face_width]
@@ -220,14 +243,15 @@ if( __name__ == '__main__'):
     # img = cv2.imread(sys.argv[1])
     # caricature = cv2.imread(sys.argv[2])
 
-    img = cv2.imread('pics/me.png')
-    caricature = cv2.imread('caricature/man_2.png')
+    img = cv2.imread('pics/3.jpg')
+    caricature = cv2.imread('caricature/man_2.jpg')
 
-    img_gray = cv2.cvtColor(img , cv2.COLOR_BGR2GRAY)
+    img_gray = gray_scale(img.copy())
+    img_gray = equalize_image(img_gray)
 
-    face = find_face(img , img_gray)
+    face_color = find_face(img , img_gray)
     # Gray Face
-    face_gray = cv2.cvtColor(face , cv2.COLOR_BGR2GRAY)
+    face_gray = gray_scale(face_color.copy())
     # Invert Gray Face
     invert_gray_face = 255 - face_gray
     # Invert Gray Gaussian Blur Face
@@ -235,12 +259,13 @@ if( __name__ == '__main__'):
 
     invert_gray_gaussian_blur_dodge_face = dodgeNaive(face_gray , invert_gray_gaussian_blur_face)
 
-    scaled_face = scale_face(invert_gray_gaussian_blur_dodge_face , 160)
+    scaled_face = scale_face(invert_gray_gaussian_blur_dodge_face , 155)
 
     #filtered_scaled_face = filter_image_GRAY(scaled_face)
     ellipsed_filtered_scaled_face = ellipse_face(scaled_face)
     ellipsed_filtered_scaled_face = remove_white_pixel(ellipsed_filtered_scaled_face)
-    final_caricature = create_caricature_GRAY(ellipsed_filtered_scaled_face , caricature , 50 , 100 )
+
+    final_caricature = create_caricature_GRAY(ellipsed_filtered_scaled_face , caricature , 55 , 105 )
 
     show_and_destroy(final_caricature)
 
