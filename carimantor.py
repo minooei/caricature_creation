@@ -26,6 +26,30 @@ def find_face(img , img_gray):
     (x , y , w , h) = faces[0]
     return img[y:y+h ,  x:x+w]
 
+def find_nose(img , img_gray):
+    nose_cascade = cv2.CascadeClassifier('haar_cascade_files/haarcascade_mcs_nose.xml')
+    noses = nose_cascade.detectMultiScale(image=img_gray, scaleFactor=1.05, minNeighbors=10)
+    (x, y, w, h) = noses[0]
+    return (img[y:y + h, x:x + w] , (x,y,w,h))
+
+def find_mouth(img , img_gray):
+    mouth_cascade = cv2.CascadeClassifier('haar_cascade_files/haarcascade_mcs_mouth.xml')
+    mouthes = mouth_cascade.detectMultiScale(image=img_gray, scaleFactor=1.05, minNeighbors=10)
+    (x, y, w, h) = mouthes[0]
+    return (img[y:y + h, x:x + w] , (x,y,w,h))
+
+def find_left_eye(img , img_gray):
+    left_eye_cascade = cv2.CascadeClassifier('haar_cascade_files/haarcascade_lefteye_2splits.xml')
+    left_eyes = left_eye_cascade.detectMultiScale(image=img_gray, scaleFactor=1.05, minNeighbors=10)
+    (x, y, w, h) = left_eyes[0]
+    return (img[y:y + h, x:x + w] , (x,y,w,h))
+
+def find_right_eye(img , img_gray):
+    right_eye_cascade = cv2.CascadeClassifier('haar_cascade_files/haarcascade_righteye_2splits.xml')
+    right_eyes = right_eye_cascade.detectMultiScale(image=img_gray, scaleFactor=1.05, minNeighbors=10)
+    (x, y, w, h) = right_eyes[0]
+    return (img[y:y + h, x:x + w] , (x,y,w,h))
+
 def gray_scale(img):
     if(img.shape[2] == 4):
         img_gray = cv2.cvtColor(img , cv2.COLOR_BGRA2GRAY)
@@ -239,6 +263,13 @@ def show_and_destroy(image):
     cv2.destroyAllWindows()
     exit()
 
+def create_face(mask , right_eye , left_eye , nose , mouth , right_eye_coor , left_eye_coor , nose_coor , mouth_coor):
+    mask[ right_eye_coor[1]:right_eye_coor[1]+right_eye_coor[3] , right_eye_coor[0]:right_eye_coor[0]+right_eye_coor[2] ] = right_eye
+    mask[ left_eye_coor[1]:left_eye_coor[1] + left_eye_coor[3] , left_eye_coor[0]:left_eye_coor[0] + left_eye_coor[2] ] = left_eye
+    mask[ nose_coor[1]:nose_coor[1] + nose_coor[3] , nose_coor[0]:nose_coor[0] + nose_coor[2] ] = nose
+    mask[ mouth_coor[1]:mouth_coor[1] + mouth_coor[3] , mouth_coor[0]:mouth_coor[0] + mouth_coor[2]] = mouth
+    return mask
+
 if( __name__ == '__main__'):
     # img = cv2.imread(sys.argv[1])
     # caricature = cv2.imread(sys.argv[2])
@@ -247,11 +278,41 @@ if( __name__ == '__main__'):
     caricature = cv2.imread('caricature/man_2.jpg')
 
     img_gray = gray_scale(img.copy())
-    img_gray = equalize_image(img_gray)
+    #img_gray = equalize_image(img_gray)
 
+    # Find Face & Gray Face
     face_color = find_face(img , img_gray)
-    # Gray Face
     face_gray = gray_scale(face_color.copy())
+
+    # Find Nose & Gray Nose
+    tmp = find_nose(face_color.copy() , face_gray.copy())
+    nose_color = tmp[0]
+    nose_gray = gray_scale(nose_color.copy())
+    nose_coordinate = tmp[1]
+
+    # Find Mouth & Gray Mouth
+    tmp = find_mouth(face_color.copy() , face_gray.copy())
+    mouth_color = tmp[0]
+    mouth_gray = gray_scale(mouth_color.copy())
+    mouth_coordinate = tmp[1]
+
+    # Find Left Eye & Gray
+    tmp = find_left_eye(face_color.copy() , face_gray.copy())
+    left_eye_color = tmp[0]
+    left_eye_gray = gray_scale(left_eye_color.copy())
+    left_eye_coordinate = tmp[1]
+
+    # Find Right Eye & Gray
+    tmp = find_right_eye(face_color.copy() , face_gray.copy())
+    right_eye_color = tmp[0]
+    right_eye_gray = gray_scale(right_eye_color.copy())
+    right_eye_coordinate = tmp[1]
+
+    mask = np.zeros_like(face_gray)
+    face = create_face(mask , right_eye_gray.copy() , left_eye_gray.copy() , nose_gray.copy() , mouth_gray.copy() , right_eye_coordinate , left_eye_coordinate , nose_coordinate , mouth_coordinate)
+
+    show_and_destroy(face)
+
     # Invert Gray Face
     invert_gray_face = 255 - face_gray
     # Invert Gray Gaussian Blur Face
