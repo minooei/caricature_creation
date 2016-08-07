@@ -1,17 +1,15 @@
 import cv2
 import numpy as np
-import sys
 
 
-def cal_scale_size(face , caricature_head_height):
-    face_height, face_width = face.shape[0:2]
-    height_scale_size = float(caricature_head_height) / float(face_height)
+def cal_scale_size(img , height_scale):
+    img_height, img_width = img.shape[0:2]
+    height_scale_size = float(height_scale) / float(img_height)
     return height_scale_size
 
-def scale_face(face , caricature_head_height):
-    scale_size = cal_scale_size(face , caricature_head_height)
-    scaled_face = cv2.resize(face , None , fx=scale_size , fy=scale_size)
-    return scaled_face.copy()
+def scale(img , scale_size):
+    scaled_img = cv2.resize(img , None , fx=scale_size , fy=scale_size , interpolation=cv2.INTER_NEAREST)
+    return scaled_img.copy()
 
 def ellipse_face(face):
     mask = np.zeros_like(face)
@@ -51,12 +49,15 @@ def find_right_eye(img , img_gray):
     return (img[y:y + h, x:x + w] , (x,y,w,h))
 
 def gray_scale(img):
-    if(img.shape[2] == 4):
-        img_gray = cv2.cvtColor(img , cv2.COLOR_BGRA2GRAY)
-        return img_gray
-    else:
-        img_gray = cv2.cvtColor(img , cv2.COLOR_BGR2GRAY)
-        return img_gray
+    try:
+        if(img.shape[2] == 4):
+            img_gray = cv2.cvtColor(img , cv2.COLOR_BGRA2GRAY)
+            return img_gray
+        else:
+            img_gray = cv2.cvtColor(img , cv2.COLOR_BGR2GRAY)
+            return img_gray
+    except:
+        return img
 
 def equalize_image(img):
     return cv2.equalizeHist(img)
@@ -157,7 +158,7 @@ def remove_white_pixel(image):
         j = 0
         while( j < cols ):
             first_val = img_copy.item(i , j)
-            if( first_val >= 210):
+            if( first_val >= 230):
                 img_copy[i , j] = 0
             j += 1
         i += 1
@@ -212,10 +213,10 @@ def write_mat_to_file(mat , file_name):
         i += 1
     return
 
-def whiter(img , name):
+def whiter(img):
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     cl1 = clahe.apply(img)
-    cv2.imwrite(name, cl1)
+    return cl1
 
 def create_caricature_RGB(face , caricature , transition_y , transition_x):
     # Scaled Face information
@@ -240,7 +241,7 @@ def create_caricature_RGB(face , caricature , transition_y , transition_x):
 
 def create_caricature_GRAY(face_gray , caricature , transition_y , transition_x):
     # Scaled Face information
-    caricature = gray_scale(caricature.copy())
+    caricature = gray_scale(caricature)
     face_height, face_width = face_gray.shape[0:2]
     # ROI
     roi = caricature[transition_y:transition_y+face_height ,transition_x:transition_x+face_width]
@@ -274,7 +275,7 @@ if( __name__ == '__main__'):
     # img = cv2.imread(sys.argv[1])
     # caricature = cv2.imread(sys.argv[2])
 
-    img = cv2.imread('pics/3.jpg')
+    img = cv2.imread('pics/me.png')
     caricature = cv2.imread('caricature/man_2.jpg')
 
     img_gray = gray_scale(img.copy())
@@ -284,11 +285,24 @@ if( __name__ == '__main__'):
     face_color = find_face(img , img_gray)
     face_gray = gray_scale(face_color.copy())
 
+    # Find scale size
+    scale_size = cal_scale_size(face_gray.copy() , 150)
+
+    # Scale Face
+    face_color = scale(face_color , scale_size)
+    face_gray = scale(face_gray , scale_size)
+
     # Find Nose & Gray Nose
     tmp = find_nose(face_color.copy() , face_gray.copy())
     nose_color = tmp[0]
     nose_gray = gray_scale(nose_color.copy())
     nose_coordinate = tmp[1]
+
+    ### Filter nose
+    invert_gray_nose = 255 - nose_gray
+    invert_gray_gaussian_blur_nose = cv2.GaussianBlur(invert_gray_nose, (121, 121), 0)
+    invert_gray_gaussian_blur_dodge_nose = dodgeNaive(nose_gray, invert_gray_gaussian_blur_nose)
+    nose_gray = remove_white_pixel(invert_gray_gaussian_blur_dodge_nose)
 
     # Find Mouth & Gray Mouth
     tmp = find_mouth(face_color.copy() , face_gray.copy())
@@ -296,22 +310,49 @@ if( __name__ == '__main__'):
     mouth_gray = gray_scale(mouth_color.copy())
     mouth_coordinate = tmp[1]
 
+    ### Filter mouth
+    invert_gray_mouth = 255 - mouth_gray
+    invert_gray_gaussian_blur_mouth = cv2.GaussianBlur(invert_gray_mouth , (121,121) , 0)
+    invert_gray_gaussian_blur_dodge_mouth = dodgeNaive(mouth_gray , invert_gray_gaussian_blur_mouth)
+    mouth_gray = remove_white_pixel(invert_gray_gaussian_blur_dodge_mouth)
+
     # Find Left Eye & Gray
     tmp = find_left_eye(face_color.copy() , face_gray.copy())
     left_eye_color = tmp[0]
     left_eye_gray = gray_scale(left_eye_color.copy())
     left_eye_coordinate = tmp[1]
 
+    ### Filter left eye
+    invert_gray_left_eye = 255 - left_eye_gray
+    invert_gray_gaussian_blur_left_eye = cv2.GaussianBlur(invert_gray_left_eye , (121,121) , 0)
+    invert_gray_gaussian_blur_dodge_left_eye = dodgeNaive(left_eye_gray , invert_gray_gaussian_blur_left_eye)
+    left_eye_gray = remove_white_pixel(invert_gray_gaussian_blur_dodge_left_eye)
+
     # Find Right Eye & Gray
     tmp = find_right_eye(face_color.copy() , face_gray.copy())
     right_eye_color = tmp[0]
     right_eye_gray = gray_scale(right_eye_color.copy())
+    #right_eye_gray = whiter(right_eye_gray)
     right_eye_coordinate = tmp[1]
 
-    mask = np.zeros_like(face_gray)
-    face = create_face(mask , right_eye_gray.copy() , left_eye_gray.copy() , nose_gray.copy() , mouth_gray.copy() , right_eye_coordinate , left_eye_coordinate , nose_coordinate , mouth_coordinate)
+    ### filter right eye
+    invert_gray_right_eye = 255 - right_eye_gray
+    invert_gray_gaussian_blur_right_eye = cv2.GaussianBlur(invert_gray_right_eye , (121,121) , 0)
+    invert_gray_gaussian_blur_dodge_right_eye = dodgeNaive(right_eye_gray , invert_gray_gaussian_blur_right_eye)
+    right_eye_gray = remove_white_pixel(invert_gray_gaussian_blur_dodge_right_eye)
 
-    show_and_destroy(face)
+    ### create face
+    # mask = np.zeros_like(face_gray)
+    # face = create_face(mask , right_eye_gray.copy() , left_eye_gray.copy() , nose_gray.copy() , mouth_gray.copy() , right_eye_coordinate , left_eye_coordinate , nose_coordinate , mouth_coordinate)
+    # scaled_face = scale(face , 145)
+
+    ### create caricature
+    final_caricature = create_caricature_GRAY(right_eye_gray.copy() , caricature.copy() , 55 + right_eye_coordinate[1] , 110 + right_eye_coordinate[0])
+    final_caricature = create_caricature_GRAY(left_eye_gray.copy() , final_caricature.copy() , 55 + left_eye_coordinate[1] , 110 + left_eye_coordinate[0])
+    final_caricature = create_caricature_GRAY(mouth_gray.copy() , final_caricature.copy() , 55 + mouth_coordinate[1] , 110 + mouth_coordinate[0])
+    final_caricature = create_caricature_GRAY(nose_gray.copy() , final_caricature.copy() , 55 + nose_coordinate[1] , 110 + nose_coordinate[0])
+
+    show_and_destroy(final_caricature)
 
     # Invert Gray Face
     invert_gray_face = 255 - face_gray
@@ -320,7 +361,7 @@ if( __name__ == '__main__'):
 
     invert_gray_gaussian_blur_dodge_face = dodgeNaive(face_gray , invert_gray_gaussian_blur_face)
 
-    scaled_face = scale_face(invert_gray_gaussian_blur_dodge_face , 155)
+    scaled_face = scale(invert_gray_gaussian_blur_dodge_face , 155)
 
     #filtered_scaled_face = filter_image_GRAY(scaled_face)
     ellipsed_filtered_scaled_face = ellipse_face(scaled_face)
@@ -330,5 +371,5 @@ if( __name__ == '__main__'):
 
     show_and_destroy(final_caricature)
 
-# az bala payin yekam boride beshe. hamin juri.
-# markaz beyzi az damagh age peyda shod.
+# gushe ha gefte behse
+# smooth. hazf sefida
