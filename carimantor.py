@@ -11,12 +11,20 @@ def scale(img , scale_size):
     scaled_img = cv2.resize(img , None , fx=scale_size , fy=scale_size , interpolation=cv2.INTER_NEAREST)
     return scaled_img.copy()
 
-def ellipse_face(face):
-    mask = np.zeros_like(face)
+def ellipse(img , Axes):
+    mask = np.zeros_like(img)
     rows , cols = mask.shape[0:2]
-    cv2.ellipse(mask , center=(rows/2 , cols/2+5) , axes=(60,60) , angle=0 , startAngle=0,
+    cv2.ellipse(mask , center=(cols/2 , rows/2) , axes=Axes , angle=0 , startAngle=0,
                 endAngle=360 , color=(255,255,255) , thickness=-1)
-    return cv2.bitwise_and(face , mask)
+    return cv2.bitwise_and(img , mask)
+
+def circle(img , Radius , center=-1):
+    mask = np.zeros_like(img)
+    rows , cols = mask.shape[0:2]
+    if( center != -1):
+        rows , cols = center
+    cv2.circle(mask , center=(cols/2 , rows/2) , radius=Radius , color=(255,255,255) , thickness=-1 )
+    return cv2.bitwise_and(img , mask)
 
 def find_face(img , img_gray):
     face_cascade = cv2.CascadeClassifier('haar_cascade_files/haarcascade_frontalface_default.xml')
@@ -127,8 +135,10 @@ def sketch(image):
 
 def cartoonify(image):
     rows , cols = image.shape[0:2]
-
-    img_gray = cv2.cvtColor(image , cv2.COLOR_BGR2GRAY)
+    try:
+        img_gray = cv2.cvtColor(image , cv2.COLOR_BGR2GRAY)
+    except:
+        img_gray = image
     image_median_blur = cv2.medianBlur(img_gray , 7)
 
     #mask = np.zeros_like(image)
@@ -140,12 +150,12 @@ def cartoonify(image):
     ret , mask = cv2.threshold(edges , 4 , 255 , cv2.THRESH_BINARY_INV)
     #mask = remove_pepper_noise(mask)
     sketch = cv2.cvtColor(mask , cv2.COLOR_GRAY2BGR)
-    repitition = 7
+    repitition = 3
     cpy_image = image.copy()
     for i in range(repitition):
-        size = 17
-        sigmacolor = 9
-        sigmaspace = 7
+        size = 10
+        sigmacolor = 20
+        sigmaspace = 20
         tmp = cv2.bilateralFilter(cpy_image, size, sigmaColor=sigmacolor, sigmaSpace=sigmaspace)
         cpy_image = cv2.bilateralFilter(tmp, size, sigmaColor=sigmacolor, sigmaSpace=sigmaspace)
     return cpy_image
@@ -275,7 +285,8 @@ if( __name__ == '__main__'):
     # img = cv2.imread(sys.argv[1])
     # caricature = cv2.imread(sys.argv[2])
 
-    img = cv2.imread('pics/me.png')
+    img = cv2.imread('pics/g.jpg')
+    show_and_destroy(cartoonify(img))
     caricature = cv2.imread('caricature/man_2.jpg')
 
     img_gray = gray_scale(img.copy())
@@ -341,33 +352,18 @@ if( __name__ == '__main__'):
     invert_gray_gaussian_blur_dodge_right_eye = dodgeNaive(right_eye_gray , invert_gray_gaussian_blur_right_eye)
     right_eye_gray = remove_white_pixel(invert_gray_gaussian_blur_dodge_right_eye)
 
-    ### create face
-    # mask = np.zeros_like(face_gray)
-    # face = create_face(mask , right_eye_gray.copy() , left_eye_gray.copy() , nose_gray.copy() , mouth_gray.copy() , right_eye_coordinate , left_eye_coordinate , nose_coordinate , mouth_coordinate)
-    # scaled_face = scale(face , 145)
+    ## ellipse
+    right_eye_gray = ellipse(right_eye_gray, Axes=(20, 35))
+    left_eye_gray = ellipse(left_eye_gray, Axes=(20, 35))
+    nose_gray = circle(nose_gray , 27)
+    mouth_gray = circle(mouth_gray , 35)
+    #show_and_destroy(right_eye_gray)
 
     ### create caricature
-    final_caricature = create_caricature_GRAY(right_eye_gray.copy() , caricature.copy() , 55 + right_eye_coordinate[1] , 110 + right_eye_coordinate[0])
+    final_caricature = create_caricature_GRAY(nose_gray.copy() , caricature.copy() , 55 + nose_coordinate[1] , 110 + nose_coordinate[0])
+    final_caricature = create_caricature_GRAY(right_eye_gray.copy() , final_caricature.copy() , 55 + right_eye_coordinate[1] , 110 + right_eye_coordinate[0])
     final_caricature = create_caricature_GRAY(left_eye_gray.copy() , final_caricature.copy() , 55 + left_eye_coordinate[1] , 110 + left_eye_coordinate[0])
     final_caricature = create_caricature_GRAY(mouth_gray.copy() , final_caricature.copy() , 55 + mouth_coordinate[1] , 110 + mouth_coordinate[0])
-    final_caricature = create_caricature_GRAY(nose_gray.copy() , final_caricature.copy() , 55 + nose_coordinate[1] , 110 + nose_coordinate[0])
-
-    show_and_destroy(final_caricature)
-
-    # Invert Gray Face
-    invert_gray_face = 255 - face_gray
-    # Invert Gray Gaussian Blur Face
-    invert_gray_gaussian_blur_face = cv2.GaussianBlur(invert_gray_face , (121,121) , 0)
-
-    invert_gray_gaussian_blur_dodge_face = dodgeNaive(face_gray , invert_gray_gaussian_blur_face)
-
-    scaled_face = scale(invert_gray_gaussian_blur_dodge_face , 155)
-
-    #filtered_scaled_face = filter_image_GRAY(scaled_face)
-    ellipsed_filtered_scaled_face = ellipse_face(scaled_face)
-    ellipsed_filtered_scaled_face = remove_white_pixel(ellipsed_filtered_scaled_face)
-
-    final_caricature = create_caricature_GRAY(ellipsed_filtered_scaled_face , caricature , 55 , 105 )
 
     show_and_destroy(final_caricature)
 
